@@ -5,12 +5,15 @@ import {
   dehydrate,
 } from "@tanstack/react-query";
 import NoteDetailsClient from "./NoteDetails.client";
+import { Metadata } from "next";
 
 type NoteDetailsProps = {
   params: Promise<{ id: string }>;
 };
 
-export async function generateMetadata({ params }: NoteDetailsProps) {
+export async function generateMetadata({
+  params,
+}: NoteDetailsProps): Promise<Metadata> {
   const res = await params;
   const id = Number(res.id);
   const note = await fetchNoteById(id);
@@ -21,8 +24,15 @@ export async function generateMetadata({ params }: NoteDetailsProps) {
     openGraph: {
       title: `Note ${note.title}`,
       description: note.content,
-      url: "http://localhost:3000/",
-      images: "https://ac.goit.global/fullstack/react/notehub-og-meta.jpg",
+      url: `http://localhost:3000/notes/${id}`,
+      images: [
+        {
+          url: "https://ac.goit.global/fullstack/react/notehub-og-meta.jpg",
+          width: 1200,
+          height: 630,
+          alt: "NoteHub",
+        },
+      ],
     },
   };
 }
