@@ -1,14 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import css from "./NoteForm.module.css";
-import { ErrorMessage, Field, Form, Formik, type FormikHelpers } from "formik";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { NewNoteData } from "../../types/note";
-
-import * as Yup from "yup";
+import { useRouter } from "next/navigation";
 import { createNote } from "@/lib/api";
-
-interface NoteFormProps {
-  onClose: () => void;
-}
+import * as Yup from "yup";
+import type { NewNoteData } from "@/types/note";
+import { useNoteDraft } from "@/lib/store/noteStore";
 
 const NewNoteSchema = Yup.object().shape({
   title: Yup.string()
@@ -21,78 +20,116 @@ const NewNoteSchema = Yup.object().shape({
     .required("This field is required"),
 });
 
-const initialValues: NewNoteData = {
-  title: "",
-  content: "",
-  tag: "Personal",
-};
+export default function NoteForm() {
+  const { draft, setDraft, clearDraft } = useNoteDraft();
 
-export default function NoteForm({ onClose }: NoteFormProps) {
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof NewNoteData, string>>
+  >({});
+
   const queryClient = useQueryClient();
 
+  const router = useRouter();
+
   const { mutate } = useMutation({
-    mutationFn: (noteData: NewNoteData) => createNote(noteData),
+    mutationFn: createNote,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
-      onClose();
+      clearDraft();
+      router.push("/notes/filter/all");
     },
   });
 
-  const handleSubmit = (
-    values: NewNoteData,
-    actions: FormikHelpers<NewNoteData>
-  ) => {
-    mutate(values);
-    actions.resetForm();
+  const handleChange = ({
+    target: { name, value },
+  }: React.ChangeEvent<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >) => {
+    setDraft({ ...draft, [name]: value });
+  };
+
+  const handleCreate = async (formData: FormData) => {
+    const values = Object.fromEntries(formData) as unknown as NewNoteData;
+
+    try {
+      const validatedData = (await NewNoteSchema.validate(values, {
+        abortEarly: false,
+      })) as NewNoteData;
+      mutate(validatedData);
+    } catch (error) {
+      const validationErrors: Partial<Record<keyof NewNoteData, string>> = {};
+
+      if (error instanceof Yup.ValidationError) {
+        for (const err of error.inner) {
+          if (err.path) {
+            validationErrors[err.path as keyof NewNoteData] = err.message;
+          }
+        }
+      }
+
+      setErrors(validationErrors);
+    }
   };
 
   return (
-    <Formik
-      initialValues={initialValues}
-      onSubmit={handleSubmit}
-      validationSchema={NewNoteSchema}
-    >
-      <Form className={css.form}>
-        <div className={css.formGroup}>
-          <label htmlFor="title">Title</label>
-          <Field id="title" type="text" name="title" className={css.input} />
-          <ErrorMessage name="title" component="span" className={css.error} />
-        </div>
+    <form className={css.form} action={handleCreate}>
+      <div className={css.formGroup}>
+        <label htmlFor="title">Title</label>
+        <input
+          id="title"
+          name="title"
+          type="text"
+          className={css.input}
+          value={draft.title}
+          onChange={handleChange}
+        />
+        {errors.title && <span className={css.error}>{errors.title}</span>}
+      </div>
 
-        <div className={css.formGroup}>
-          <label htmlFor="content">Content</label>
-          <Field
-            id="content"
-            name="content"
-            rows="8"
-            className={css.textarea}
-            as="textarea"
-          />
-          <ErrorMessage name="content" component="span" className={css.error} />
-        </div>
+      <div className={css.formGroup}>
+        <label htmlFor="content">Content</label>
+        <textarea
+          id="content"
+          name="content"
+          rows={8}
+          className={css.textarea}
+          value={draft.content}
+          onChange={handleChange}
+        />
+        {errors.content && <span className={css.error}>{errors.content}</span>}
+      </div>
 
-        <div className={css.formGroup}>
-          <label htmlFor="tag">Tag</label>
-          <Field id="tag" name="tag" as="select" className={css.select}>
-            <option value="">Choose something</option>
-            <option value="Todo">Todo</option>
-            <option value="Work">Work</option>
-            <option value="Personal">Personal</option>
-            <option value="Meeting">Meeting</option>
-            <option value="Shopping">Shopping</option>
-          </Field>
-          <ErrorMessage name="tag" component="span" className={css.error} />
-        </div>
+      <div className={css.formGroup}>
+        <label htmlFor="tag">Tag</label>
+        <select
+          id="tag"
+          name="tag"
+          className={css.select}
+          value={draft.tag}
+          onChange={handleChange}
+        >
+          <option value="">Choose something</option>
+          <option value="Todo">Todo</option>
+          <option value="Work">Work</option>
+          <option value="Personal">Personal</option>
+          <option value="Meeting">Meeting</option>
+          <option value="Shopping">Shopping</option>
+        </select>
+        {errors.tag && <span className={css.error}>{errors.tag}</span>}
+      </div>
 
-        <div className={css.actions}>
-          <button type="button" className={css.cancelButton} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className={css.submitButton} disabled={false}>
-            Create note
-          </button>
-        </div>
-      </Form>
-    </Formik>
+      <div className={css.actions}>
+        <button
+          type="button"
+          className={css.cancelButton}
+          onClick={router.back}
+        >
+          Cancel
+        </button>
+        <button type="submit" className={css.submitButton}>
+          Create note
+        </button>
+      </div>
+    </form>
   );
 }
