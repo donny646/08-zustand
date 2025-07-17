@@ -26,7 +26,7 @@ export default function CreateNote() {
       <div className={css.container}>
         <h1 className={css.title}>Create note</h1>
         {/* NoteForm component */}
-        <NoteForm />
+        <NoteForm onClose={() => {}} />
       </div>
     </main>
   );
